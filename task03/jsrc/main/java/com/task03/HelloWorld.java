@@ -9,19 +9,28 @@ import java.util.HashMap;
 import java.util.Map;
 
 @LambdaHandler(
-    lambdaName = "hello_world",
-	roleName = "hello_world-role",
-	isPublishVersion = true,
-	aliasName = "${lambdas_alias_name}",
-	logsExpiration = RetentionSetting.SYNDICATE_ALIASES_SPECIFIED
+		lambdaName = "hello_world",
+		roleName = "hello_world-role",
+		isPublishVersion = true,
+		aliasName = "learn",
+		logsExpiration = RetentionSetting.SYNDICATE_ALIASES_SPECIFIED
 )
 public class HelloWorld implements RequestHandler<Object, Map<String, Object>> {
 
+	@Override
 	public Map<String, Object> handleRequest(Object request, Context context) {
+		// Log a message
 		System.out.println("Hello from lambda");
-		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		// Create the response map
+		Map<String, Object> resultMap = new HashMap<>();
+
+		// Set the status code
 		resultMap.put("statusCode", 200);
-		resultMap.put("body", "Hello from Lambda");
+
+		// Set the message directly in the resultMap
+		resultMap.put("message", "Hello from Lambda");
+
 		return resultMap;
 	}
 }

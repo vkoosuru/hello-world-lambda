@@ -25,6 +25,15 @@
     "resource_type": "iam_policy",
     "tags": {}
   },
+  "hello_wolrd-role": {
+    "predefined_policies": [],
+    "principal_service": "lambda",
+    "custom_policies": [
+      "lambda-basic-execution"
+    ],
+    "resource_type": "iam_role",
+    "tags": {}
+  },
   "hello_world-role": {
     "predefined_policies": [],
     "principal_service": "lambda",
@@ -34,31 +43,11 @@
     "resource_type": "iam_role",
     "tags": {}
   },
-  "hello-world-api": {
+  "task3_api": {
     "resource_type": "api_gateway",
     "deploy_stage": "dev",
-    "resources": {
-      "/hello": {
-        "GET": {
-          "lambda_integration": {
-            "lambda_name": "hello_world"
-          },
-          "responses": {
-            "200": {
-              "description": "Successful response",
-              "response_model": {
-                "application/json": {
-                  "statusCode": 200,
-                  "message": "Hello from Lambda"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "tags": {
-      "Environment": "dev"
-    }
+    "dependencies": [],
+    "resources": {},
+    "tags": {}
   }
 }
