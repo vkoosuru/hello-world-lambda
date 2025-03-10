@@ -45,13 +45,18 @@ async function processRecord(record) {
   if (eventName === "INSERT") {
     const newImage = unmarshallImage(dynamodbRecord.NewImage);
     auditItem.newValue = { key: newImage.key, value: newImage.value };
+
   } else if (eventName === "MODIFY") {
     const oldImage = unmarshallImage(dynamodbRecord.OldImage);
     const newImage = unmarshallImage(dynamodbRecord.NewImage);
 
-    auditItem.oldValue = oldImage.value;
-    auditItem.newValue = newImage.value;
+    // Extract "value" and ensure it's a plain number
+    auditItem.oldValue = oldImage && typeof oldImage.value === "number" ? oldImage.value : null;
+    auditItem.newValue = newImage && typeof newImage.value === "number" ? newImage.value : null;
+
+    // Add context for the updated attribute
     auditItem.updatedAttribute = "value"; // Assuming only 'value' changes
+
   } else if (eventName === "REMOVE") {
     const oldImage = unmarshallImage(dynamodbRecord.OldImage);
     auditItem.oldValue = oldImage;
@@ -63,7 +68,7 @@ async function processRecord(record) {
     TableName: TABLE_NAME,
     Item: auditItem
   });
-console.log("Attempting to write to table:", params.TableName);
+  console.log("Attempting to write to table:", params.TableName);
 
   return await dynamoDB.send(params);
 }
@@ -82,7 +87,8 @@ function unmarshallImage(image) {
     if (value.S !== undefined) {
       result[key] = value.S;
     } else if (value.N !== undefined) {
-      result[key] = Number(value.N);
+      // Always convert DynamoDB numeric values to proper numbers
+      result[key] = parseFloat(value.N); // Ensures value is stored as a number
     } else if (value.BOOL !== undefined) {
       result[key] = value.BOOL;
     } else if (value.M !== undefined) {
