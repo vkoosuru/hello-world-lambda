@@ -6,160 +6,191 @@ AWS.config.update({ region: "us-east-1" });
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 const cognito = new AWS.CognitoIdentityServiceProvider();
 
-const USER_POOL_ID = "your-user-pool-id";
-const CLIENT_ID = "your-client-id";
+// Use environment variables (set these in Lambda config)
+const USER_POOL_ID = process.env.USER_POOL_ID || "your-user-pool-id"; // Replace with actual ID
+const CLIENT_ID = process.env.CLIENT_ID || "your-client-id"; // Replace with actual Client ID
 
 // Email validation regex
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Password validation: At least 12 characters, 1 uppercase, 1 lowercase, 1 number, 1 special character
-const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
+// Password validation: Match Cognito's policy (8+ chars, upper, lower, number, special)
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
-// Signup Function
-exports.signup = async (event) => {
+exports.handler = async (event) => {
+  console.log("Event:", event);
+
+  const { httpMethod, resource, body } = event;
+  let parsedBody;
   try {
-    const body = JSON.parse(event.body);
+    parsedBody = body ? JSON.parse(body) : {};
+  } catch (error) {
+    return {
+      statusCode: 400,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Invalid JSON payload" }),
+    };
+  }
 
-    // Validate input
-    if (!body.email || !body.password) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "Email and password are required" })
+  // Signup
+  if (resource === "/signup" && httpMethod === "POST") {
+    try {
+      const { email, password } = parsedBody;
+
+      if (!email || !password) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Email and password are required" }),
+        };
+      }
+
+      if (!emailRegex.test(email)) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Invalid email format" }),
+        };
+      }
+
+      if (!passwordRegex.test(password)) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: "Password must be at least 8 characters, include an uppercase, lowercase, number, and special character",
+          }),
+        };
+      }
+
+      const params = {
+        ClientId: CLIENT_ID,
+        Username: email,
+        Password: password,
+        UserAttributes: [{ Name: "email", Value: email }],
       };
-    }
 
-    if (!emailRegex.test(body.email)) {
+      await cognito.signUp(params).promise();
+
       return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "Invalid email format" })
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "User created successfully" }),
       };
-    }
-
-    if (!passwordRegex.test(body.password)) {
+    } catch (error) {
+      console.error("Signup error:", error);
       return {
-        statusCode: 400,
+        statusCode: error.code === "UsernameExistsException" ? 400 : 500,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: "Password must be at least 12 characters, include an uppercase, lowercase, number, and special character"
-        })
+          message: error.code === "UsernameExistsException" ? "User already exists" : "Error signing up",
+        }),
       };
     }
-
-    const params = {
-      ClientId: CLIENT_ID,
-      Username: body.email,
-      Password: body.password,
-      UserAttributes: [{ Name: "email", Value: body.email }]
-    };
-
-    await cognito.signUp(params).promise();
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "User created successfully" })
-    };
-  } catch (error) {
-    console.error("Signup error:", error);
-    return {
-      statusCode: error.code === "UsernameExistsException" ? 400 : 500,
-      body: JSON.stringify({
-        message: error.code === "UsernameExistsException" ? "User already exists" : "Error signing up"
-      })
-    };
   }
-};
 
-// Signin Function
-exports.signin = async (event) => {
-  try {
-    const body = JSON.parse(event.body);
+  // Signin
+  if (resource === "/signin" && httpMethod === "POST") {
+    try {
+      const { email, password } = parsedBody;
 
-    if (!body.email || !body.password) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "Email and password are required" })
-      };
-    }
-
-    const params = {
-      AuthFlow: "USER_PASSWORD_AUTH",
-      ClientId: CLIENT_ID,
-      AuthParameters: {
-        USERNAME: body.email,
-        PASSWORD: body.password
+      if (!email || !password) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Email and password are required" }),
+        };
       }
-    };
 
-    const response = await cognito.initiateAuth(params).promise();
+      const params = {
+        AuthFlow: "USER_PASSWORD_AUTH",
+        ClientId: CLIENT_ID,
+        AuthParameters: {
+          USERNAME: email,
+          PASSWORD: password,
+        },
+      };
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ token: response.AuthenticationResult.IdToken })
-    };
-  } catch (error) {
-    console.error("Signin error:", error);
-    return {
-      statusCode: error.code === "NotAuthorizedException" || error.code === "UserNotFoundException" ? 400 : 500,
-      body: JSON.stringify({
-        message: error.code === "NotAuthorizedException" || error.code === "UserNotFoundException" ? "Invalid credentials" : "Error signing in"
-      })
-    };
-  }
-};
+      const response = await cognito.initiateAuth(params).promise();
 
-// Create Table Entry
-exports.createTable = async (event) => {
-  try {
-    const body = JSON.parse(event.body);
-
-    if (!body.id || !body.number || !body.capacity) {
       return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "All fields are required" })
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: response.AuthenticationResult.IdToken }),
+      };
+    } catch (error) {
+      console.error("Signin error:", error);
+      return {
+        statusCode: error.code === "NotAuthorizedException" || error.code === "UserNotFoundException" ? 400 : 500,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: error.code === "NotAuthorizedException" || error.code === "UserNotFoundException" ? "Invalid credentials" : "Error signing in",
+        }),
       };
     }
+  }
 
-    const params = {
-      TableName: "Tables",
-      Item: {
-        id: body.id,
-        number: body.number,
-        capacity: body.capacity
+  // Create Table
+  if (resource === "/tables" && httpMethod === "POST") {
+    try {
+      const { id, number, capacity } = parsedBody;
+
+      if (!id || !number || !capacity) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "All fields are required" }),
+        };
       }
-    };
 
-    await dynamoDb.put(params).promise();
+      const params = {
+        TableName: "Tables",
+        Item: { id, number, capacity },
+      };
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "Table created successfully" })
-    };
-  } catch (error) {
-    console.error("Error creating table:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Error creating table" })
-    };
+      await dynamoDb.put(params).promise();
+
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Table created successfully" }),
+      };
+    } catch (error) {
+      console.error("Error creating table:", error);
+      return {
+        statusCode: 500,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Error creating table" }),
+      };
+    }
   }
-};
 
-// Fetch Reservations
-exports.getReservations = async () => {
-  try {
-    const params = {
-      TableName: "Reservations"
-    };
+  // Get Reservations
+  if (resource === "/reservations" && httpMethod === "GET") {
+    try {
+      const params = {
+        TableName: "Reservations",
+      };
 
-    const data = await dynamoDb.scan(params).promise();
+      const data = await dynamoDb.scan(params).promise();
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify(data.Items)
-    };
-  } catch (error) {
-    console.error("Error fetching reservations:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Error fetching reservations" })
-    };
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data.Items),
+      };
+    } catch (error) {
+      console.error("Error fetching reservations:", error);
+      return {
+        statusCode: 500,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Error fetching reservations" }),
+      };
+    }
   }
+
+  return {
+    statusCode: 404,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: "Resource not found" }),
+  };
 };
