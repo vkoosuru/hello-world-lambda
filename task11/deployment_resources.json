@@ -41,7 +41,7 @@
     "username_attributes": ["email"],
     "custom_attributes": [],
     "client": {
-      "ClientName": "simple-booking-client",
+      "name": "simple-booking-client",  // Changed back to "name"
       "generate_secret": false,
       "allowed_oauth_flows": ["code", "implicit"],
       "allowed_oauth_scopes": ["email", "openid"]
