@@ -15,7 +15,6 @@
             "ssm:PutParameter",
             "ssm:GetParameter",
             "kms:Decrypt",
-            "cognito-idp:AdminCreateUser",
             "cognito-idp:SignUp",
             "cognito-idp:InitiateAuth"
           ],
@@ -42,7 +41,7 @@
     "username_attributes": ["email"],
     "custom_attributes": [],
     "client": {
-      "name": "simple-booking-client",
+      "ClientName": "simple-booking-client",
       "generate_secret": false,
       "allowed_oauth_flows": ["code", "implicit"],
       "allowed_oauth_scopes": ["email", "openid"]
@@ -153,9 +152,7 @@
         "type": "COGNITO_USER_POOLS",
         "identity_source": "method.request.header.Authorization",
         "ttl": 300,
-        "user_pools": [
-          "simple-booking-userpool"
-        ]
+        "user_pools": ["simple-booking-userpool"]
       }
     }
   },
